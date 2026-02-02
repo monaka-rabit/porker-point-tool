@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Texas Hold'em Manager</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --table-color: #2e5c46;
+            --table-border: #4a3b2a;
+            --text-color: #e0e0e0;
+            --accent-color: #d4af37; /* Gold */
+            --danger-color: #cf6679;
+            --btn-fold: #b71c1c;
+            --btn-check: #2e7d32;
+            --btn-raise: #f57f17;
+            --chip-color: #ffb74d;
+        }
+
+        * { box-sizing: border-box; touch-action: manipulation; user-select: none; }
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Utility */
+        .hidden { display: none !important; }
+        .full-screen { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 10; background: var(--bg-color); }
+        
+        /* Setup Screen */
+        #setup-screen { padding: 20px; overflow-y: auto; z-index: 20; }
+        h1, h2 { text-align: center; color: var(--accent-color); margin: 0.5rem 0; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 0.9rem; }
+        input[type="text"], input[type="number"] {
+            width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: #fff; font-size: 1rem;
+        }
+        button {
+            width: 100%; padding: 12px; border: none; border-radius: 5px; font-size: 1rem; font-weight: bold; cursor: pointer; color: #fff; margin-top: 10px;
+        }
+        .btn-primary { background: var(--accent-color); color: #000; }
+        .btn-secondary { background: #444; }
+        .player-row { display: flex; gap: 10px; margin-bottom: 10px; }
+        
+        /* Header Info */
+        #game-header {
+            height: 50px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #1f1f1f; border-bottom: 1px solid #333;
+        }
+        .round-info { font-weight: bold; color: var(--accent-color); }
+        .header-btn { background: none; border: 1px solid #555; padding: 5px 10px; font-size: 0.8rem; width: auto; margin: 0; color: #ccc; }
+
+        /* Poker Table Area */
+        #table-area {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* overflow hiddenを外して、paddingで内側に寄せることで見切れ防止 */
+            overflow: hidden; 
+            padding: 40px; 
+        }
+        
+        #poker-table {
+            /* 画面いっぱいではなく、座席分のスペースを空けるためにサイズ縮小 */
+            width: 70vw; 
+            height: 40vh;
+            max-width: 500px;
+            max-height: 350px;
+            background: var(--table-color);
+            border: 8px solid var(--table-border);
+            border-radius: 120px;
+            position: relative;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.5);
+        }
+
+        /* Center Info */
+        #table-center {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            width: 100%;
+        }
+        .pot-total { font-size: 1.8rem; color: #fff; font-weight: bold; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+        .pot-label { font-size: 0.8rem; color: #ccc; opacity: 0.8; }
+        .community-cards { margin-top: 5px; font-size: 0.9rem; color: var(--accent-color); letter-spacing: 2px; }
+        .current-turn-indicator {
+            margin-top: 5px; font-size: 0.85rem; color: var(--accent-color); font-weight: bold;
+            animation: textPulse 1s infinite alternate;
+        }
+
+        /* Player Seats */
+        .seat {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: #333;
+            border-radius: 50%;
+            border: 2px solid #555;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.8rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.5);
+            transition: all 0.3s ease;
+            z-index: 5;
+        }
+        
+        /* ★ 誰の番か明確にする変更点 */
+        @keyframes activePulse {
+            0% { box-shadow: 0 0 10px var(--accent-color); transform: scale(1.1); }
+            100% { box-shadow: 0 0 25px var(--accent-color), 0 0 10px #fff; transform: scale(1.15); }
+        }
+        @keyframes textPulse {
+            from { opacity: 0.7; }
+            to { opacity: 1; }
+        }
+
+        .seat.active { 
+            background: var(--accent-color); /* 背景を金に */
+            color: #000; /* 文字を黒に */
+            border-color: #fff;
+            animation: activePulse 0.8s infinite alternate; /* 点滅アニメーション */
+            z-index: 10;
+        }
+        .seat.active .seat-stack { color: #000; font-weight: bold; }
+
+        .seat.folded { opacity: 0.4; border-color: var(--danger-color); background: #222; }
+        
+        .seat-name { font-weight: bold; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; max-width: 90%; }
+        .seat-stack { color: var(--accent-color); font-size: 0.75rem; }
+        
+        /* Dealer Button */
+        .dealer-btn {
+            position: absolute;
+            width: 20px; height: 20px;
+            background: #fff; color: #000;
+            border-radius: 50%;
+            font-size: 12px; font-weight: bold;
+            display: flex; justify-content: center; align-items: center;
+            bottom: -5px; right: -5px;
+            border: 1px solid #000;
+            z-index: 6;
+        }
+
+        /* Bet Bubble */
+        .bet-bubble {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            border: 1px solid var(--chip-color);
+            white-space: nowrap;
+            z-index: 7;
+            font-weight: bold;
+        }
+
+        /* Control Panel */
+        #controls {
+            flex-shrink: 0;
+            background: #1f1f1f;
+            padding: 15px 10px;
+            border-top: 1px solid #333;
+            z-index: 100;
+            padding-bottom: max(15px, env(safe-area-inset-bottom));
+        }
+        .action-info { text-align: center; margin-bottom: 8px; font-size: 1.1rem; color: #fff; font-weight: bold; }
+        .main-actions { display: flex; gap: 10px; height: 55px; }
+        .action-btn { flex: 1; border: none; border-radius: 8px; color: #fff; font-weight: bold; font-size: 1.1rem; }
+        .btn-fold { background: var(--btn-fold); }
+        .btn-check { background: var(--btn-check); }
+        .btn-raise { background: var(--btn-raise); }
+        
+        .raise-options { display: flex; gap: 5px; margin-top: 8px; justify-content: space-between; }
+        .raise-opt-btn { flex: 1; background: #333; border: 1px solid #555; color: #fff; padding: 10px 0; border-radius: 4px; font-size: 0.9rem; }
+        
+        /* Winner Selection */
+        #winner-screen { display: flex; flex-direction: column; padding: 20px; }
+        .winner-list { flex-grow: 1; overflow-y: auto; }
+        .winner-item { 
+            display: flex; align-items: center; padding: 15px; border-bottom: 1px solid #333; cursor: pointer;
+        }
+        .winner-item input { width: auto; margin-right: 15px; transform: scale(1.5); }
+        
+        /* Modal Overlay */
+        #custom-bet-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85); z-index: 200;
+            display: flex; flex-direction: column; justify-content: center; padding: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen" class="full-screen">
+        <h1>Texas Hold'em Manager</h1>
+        <div class="input-group">
+            <label>初期チップ (Initial Stack)</label>
+            <input type="number" id="init-chips" value="1000">
+        </div>
+        <div class="input-group">
+            <label>Big Blind (BB)</label>
+            <input type="number" id="init-bb" value="20">
+        </div>
+        <div class="input-group">
+            <label>プレイヤー</label>
+            <div id="player-list-inputs">
+                </div>
+            <button class="btn-secondary" onclick="addPlayerInput()">+ プレイヤー追加</button>
+        </div>
+        <button class="btn-primary" onclick="startGame()">ゲーム開始</button>
+    </div>
+
+    <div id="game-screen" class="full-screen hidden" style="display: flex; flex-direction: column;">
+        <div id="game-header">
+            <button class="header-btn" onclick="undo()">Undo</button>
+            <div class="round-info" id="round-display">PREFLOP</div>
+            <button class="header-btn" onclick="openSetup()">Menu</button>
+        </div>
+
+        <div id="table-area">
+            <div id="poker-table">
+                <div id="table-center">
+                    <div class="pot-label">POT</div>
+                    <div class="pot-total" id="pot-amount">0</div>
+                    <div class="community-cards" id="comm-cards"></div>
+                    <div class="current-turn-indicator" id="turn-indicator"></div>
+                </div>
+                </div>
+        </div>
+
+        <div id="controls">
+            <div class="action-info" id="action-info">Player's Turn</div>
+            <div class="main-actions">
+                <button class="action-btn btn-fold" onclick="handleAction('fold')">FOLD</button>
+                <button class="action-btn btn-check" id="btn-check-call" onclick="handleAction('check')">CHECK</button>
+                <button class="action-btn btn-raise" onclick="toggleRaiseMenu()">RAISE</button>
+            </div>
+            <div id="raise-menu" class="raise-options hidden">
+                <button class="raise-opt-btn" onclick="handleAction('raise', 'min')">Min</button>
+                <button class="raise-opt-btn" onclick="handleAction('raise', 2.0)">2BB</button>
+                <button class="raise-opt-btn" onclick="handleAction('raise', 3.0)">3BB</button>
+                <button class="raise-opt-btn" onclick="handleAction('raise', 'pot')">Pot</button>
+                <button class="raise-opt-btn" style="background:#555" onclick="openCustomBet()">Custom</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="winner-screen" class="full-screen hidden">
+        <h2>Who Won?</h2>
+        <div class="winner-list" id="winner-list">
+            </div>
+        <button class="btn-primary" onclick="confirmWinner()">確定して次へ</button>
+    </div>
+
+    <div id="custom-bet-modal" class="hidden">
+        <h2 style="color:white">ベット額を入力</h2>
+        <input type="number" id="custom-bet-input" placeholder="Amount">
+        <div style="display:flex; gap:10px; margin-top:20px;">
+            <button class="btn-secondary" onclick="closeCustomBet()">キャンセル</button>
+            <button class="btn-primary" onclick="submitCustomBet()">決定</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA STRUCTURES ---
+        const ROUNDS = ["PREFLOP", "FLOP", "TURN", "RIVER"];
+        let gameState = {
+            players: [],
+            bb: 20,
+            sb: 10,
+            pot: 0,
+            dealerIndex: 0,
+            currentPlayerIndex: 0,
+            roundIndex: 0, // 0-3
+            currentMaxBet: 0, 
+            minRaise: 0,
+            lastRaiseAmount: 0, 
+            board: [] 
+        };
+
+        let historyStack = [];
+
+        // --- SETUP & INIT ---
+        function initSetup() {
+            const container = document.getElementById('player-list-inputs');
+            container.innerHTML = '';
+            for(let i=1; i<=4; i++) {
+                addPlayerInput(`Player ${i}`);
+            }
+        }
+
+        function addPlayerInput(defaultName = "") {
+            const container = document.getElementById('player-list-inputs');
+            const div = document.createElement('div');
+            div.className = 'player-row';
+            div.innerHTML = `
+                <input type="text" placeholder="Name" value="${defaultName}" class="p-name">
+                <button class="btn-secondary" style="width:40px;margin:0;" onclick="this.parentElement.remove()">x</button>
+            `;
+            container.appendChild(div);
+        }
+
+        function startGame() {
+            const pInputs = document.querySelectorAll('.p-name');
+            const initChips = parseInt(document.getElementById('init-chips').value);
+            const bb = parseInt(document.getElementById('init-bb').value);
+            
+            gameState.players = [];
+            pInputs.forEach(input => {
+                if(input.value.trim() !== "") {
+                    gameState.players.push({
+                        name: input.value,
+                        chips: initChips,
+                        isActive: true,
+                        isFolded: false,
+                        isAllIn: false,
+                        currentRoundBet: 0,
+                        hasActed: false
+                    });
+                }
+            });
+
+            if(gameState.players.length < 2) {
+                alert("最低2人のプレイヤーが必要です");
+                return;
+            }
+
+            gameState.bb = bb;
+            gameState.sb = Math.floor(bb / 2);
+            gameState.dealerIndex = Math.floor(Math.random() * gameState.players.length);
+
+            document.getElementById('setup-screen').classList.add('hidden');
+            // Remove hidden but ensure display:flex is respected
+            const gameScreen = document.getElementById('game-screen');
+            gameScreen.classList.remove('hidden');
+            
+            startNewHand();
+        }
+
+        function startNewHand() {
+            saveState();
+            
+            gameState.dealerIndex = (gameState.dealerIndex + 1) % gameState.players.length;
+            
+            gameState.pot = 0;
+            gameState.roundIndex = 0;
+            gameState.board = [];
+            gameState.currentMaxBet = gameState.bb;
+            gameState.lastRaiseAmount = gameState.bb;
+            gameState.minRaise = gameState.bb * 2; 
+
+            gameState.players.forEach(p => {
+                p.currentRoundBet = 0;
+                p.hasActed = false;
+                
+                if (p.chips > 0) {
+                    p.isActive = true;
+                    p.isFolded = false;
+                    p.isAllIn = false;
+                } else {
+                    p.isActive = false;
+                    p.isFolded = true;
+                    p.hasActed = true;
+                }
+            });
+
+            const sbIndex = getNextActivePlayer(gameState.dealerIndex);
+            const bbIndex = getNextActivePlayer(sbIndex);
+            
+            postBlind(sbIndex, gameState.sb);
+            postBlind(bbIndex, gameState.bb);
+
+            gameState.currentPlayerIndex = getNextActivePlayer(bbIndex);
+
+            render();
+        }
+
+        function postBlind(pIndex, amount) {
+            const p = gameState.players[pIndex];
+            const actualBet = Math.min(p.chips, amount);
+            p.chips -= actualBet;
+            p.currentRoundBet += actualBet;
+            gameState.pot += actualBet;
+            if(p.chips === 0) p.isAllIn = true;
+        }
+
+        // --- CORE GAME LOGIC ---
+
+        function handleAction(action, val) {
+            saveState();
+            const p = gameState.players[gameState.currentPlayerIndex];
+            
+            if (action === 'fold') {
+                p.isFolded = true;
+                p.isActive = false;
+                p.hasActed = true;
+            } else if (action === 'check') {
+                const callAmount = gameState.currentMaxBet - p.currentRoundBet;
+                if (callAmount > 0) {
+                    const amount = Math.min(p.chips, callAmount);
+                    p.chips -= amount;
+                    p.currentRoundBet += amount;
+                    gameState.pot += amount;
+                    if(p.chips === 0) p.isAllIn = true;
+                }
+                p.hasActed = true;
+            } else if (action === 'raise') {
+                gameState.players.forEach(pl => {
+                    if(!pl.isFolded && !pl.isAllIn) pl.hasActed = false;
+                });
+
+                let targetTotalBet = 0;
+                const currentCall = gameState.currentMaxBet;
+                
+                if (val === 'min') {
+                    let raiseStep = Math.max(gameState.bb, gameState.lastRaiseAmount);
+                    targetTotalBet = currentCall + raiseStep;
+                } else if (val === 'pot') {
+                    const callAmount = currentCall - p.currentRoundBet;
+                    targetTotalBet = currentCall + (gameState.pot + callAmount);
+                } else if (typeof val === 'number') {
+                    targetTotalBet = currentCall + (gameState.bb * val);
+                } else {
+                    targetTotalBet = parseInt(val);
+                }
+
+                if (targetTotalBet < currentCall + gameState.lastRaiseAmount && targetTotalBet < p.chips + p.currentRoundBet) {
+                    if (targetTotalBet >= p.chips + p.currentRoundBet) {
+                        targetTotalBet = p.chips + p.currentRoundBet; 
+                    } else {
+                        const minTotal = currentCall + Math.max(gameState.bb, gameState.lastRaiseAmount);
+                        targetTotalBet = Math.max(targetTotalBet, minTotal);
+                    }
+                }
+
+                const needed = targetTotalBet - p.currentRoundBet;
+                const actualBet = Math.min(p.chips, needed);
+                
+                const raiseDiff = (p.currentRoundBet + actualBet) - gameState.currentMaxBet;
+                if (raiseDiff > 0) gameState.lastRaiseAmount = raiseDiff;
+
+                p.chips -= actualBet;
+                p.currentRoundBet += actualBet;
+                gameState.pot += actualBet;
+                gameState.currentMaxBet = Math.max(gameState.currentMaxBet, p.currentRoundBet);
+                
+                if(p.chips === 0) p.isAllIn = true;
+                
+                p.hasActed = true;
+            }
+
+            const activeCount = gameState.players.filter(pl => !pl.isFolded).length;
+            if (activeCount === 1) {
+                resolveWinnerAuto();
+                return;
+            }
+
+            if (isRoundComplete()) {
+                nextRound();
+            } else {
+                gameState.currentPlayerIndex = getNextActivePlayer(gameState.currentPlayerIndex);
+            }
+            
+            document.getElementById('raise-menu').classList.add('hidden');
+            render();
+        }
+
+        function isRoundComplete() {
+            const unactedPlayer = gameState.players.some(p => !p.isFolded && !p.isAllIn && !p.hasActed);
+            if (unactedPlayer) return false;
+
+            const unfinished = gameState.players.some(p => {
+                if(p.isFolded || p.isAllIn) return false;
+                return p.currentRoundBet !== gameState.currentMaxBet;
+            });
+            
+            if (unfinished) return false;
+
+            return true;
+        }
+
+        function nextRound() {
+            gameState.roundIndex++;
+            if (gameState.roundIndex >= 4) {
+                showWinnerScreen();
+                return;
+            }
+
+            gameState.currentMaxBet = 0;
+            gameState.lastRaiseAmount = gameState.bb;
+            gameState.players.forEach(p => {
+                p.currentRoundBet = 0;
+                p.hasActed = false;
+            });
+            
+            gameState.currentPlayerIndex = getNextActivePlayer(gameState.dealerIndex);
+
+            render();
+        }
+
+        function getNextActivePlayer(startIndex) {
+            let idx = (startIndex + 1) % gameState.players.length;
+            let count = 0;
+            while ((gameState.players[idx].isFolded || gameState.players[idx].isAllIn) && count < gameState.players.length) {
+                idx = (idx + 1) % gameState.players.length;
+                count++;
+            }
+            return idx;
+        }
+
+        // --- WINNER LOGIC ---
+
+        function resolveWinnerAuto() {
+            const winner = gameState.players.find(p => !p.isFolded);
+            alert(`${winner.name} Wins! Pot: ${gameState.pot}`);
+            winner.chips += gameState.pot;
+            startNewHand();
+        }
+
+        function showWinnerScreen() {
+            const list = document.getElementById('winner-list');
+            list.innerHTML = '';
+            const activePlayers = gameState.players.filter(p => !p.isFolded);
+            
+            activePlayers.forEach((p, idx) => {
+                const globalIdx = gameState.players.indexOf(p);
+                const div = document.createElement('div');
+                div.className = 'winner-item';
+                div.innerHTML = `
+                    <input type="checkbox" value="${globalIdx}" id="win-${globalIdx}">
+                    <label for="win-${globalIdx}" style="flex-grow:1">
+                        ${p.name} <span style="color:#aaa">(${p.chips} chips)</span>
+                    </label>
+                `;
+                div.onclick = (e) => {
+                    if(e.target.tagName !== 'INPUT') {
+                        const cb = div.querySelector('input');
+                        cb.checked = !cb.checked;
+                    }
+                };
+                list.appendChild(div);
+            });
+            
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('winner-screen').classList.remove('hidden');
+        }
+
+        function confirmWinner() {
+            saveState();
+            const checkboxes = document.querySelectorAll('#winner-list input:checked');
+            if (checkboxes.length === 0) return;
+
+            const winnerIndices = Array.from(checkboxes).map(cb => parseInt(cb.value));
+            const splitAmount = Math.floor(gameState.pot / winnerIndices.length);
+            const remainder = gameState.pot % winnerIndices.length;
+
+            winnerIndices.forEach((idx, i) => {
+                gameState.players[idx].chips += splitAmount;
+                if (i === 0) gameState.players[idx].chips += remainder; 
+            });
+
+            document.getElementById('winner-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            startNewHand();
+        }
+
+        // --- UI RENDER ---
+
+        function render() {
+            // Header
+            document.getElementById('round-display').textContent = ROUNDS[gameState.roundIndex];
+            document.getElementById('pot-amount').textContent = gameState.pot;
+            
+            // Community Cards
+            let cardsText = "";
+            if(gameState.roundIndex > 0) cardsText += "🂠🂠🂠 ";
+            if(gameState.roundIndex > 1) cardsText += "🂠 ";
+            if(gameState.roundIndex > 2) cardsText += "🂠";
+            document.getElementById('comm-cards').textContent = cardsText;
+            
+            // Turn Indicator (Center)
+            const activePlayer = gameState.players[gameState.currentPlayerIndex];
+            document.getElementById('turn-indicator').textContent = activePlayer ? `Current: ${activePlayer.name}` : "";
+
+            // Seats
+            const table = document.getElementById('poker-table');
+            document.querySelectorAll('.seat, .dealer-btn, .bet-bubble').forEach(e => e.remove());
+
+            const totalP = gameState.players.length;
+            const centerX = table.clientWidth / 2;
+            const centerY = table.clientHeight / 2;
+            // 修正: 半径をテーブルサイズより大きく取りすぎないようにする
+            // テーブルの外周にちょうど乗るくらいの位置調整
+            const radiusX = (table.clientWidth / 2) + 10; 
+            const radiusY = (table.clientHeight / 2) + 10;
+
+            gameState.players.forEach((p, i) => {
+                const angleStep = (2 * Math.PI) / totalP;
+                const angle = (i * angleStep) + (Math.PI / 2); 
+                
+                const x = centerX + (radiusX * Math.cos(angle)) - 35; 
+                const y = centerY + (radiusY * Math.sin(angle)) - 35;
+
+                const seat = document.createElement('div');
+                seat.className = `seat ${i === gameState.currentPlayerIndex ? 'active' : ''} ${p.isFolded ? 'folded' : ''}`;
+                seat.style.left = `${x}px`;
+                seat.style.top = `${y}px`;
+                seat.innerHTML = `
+                    <div class="seat-name">${p.name}</div>
+                    <div class="seat-stack">${p.chips}</div>
+                `;
+                table.appendChild(seat);
+
+                if (i === gameState.dealerIndex) {
+                    const dBtn = document.createElement('div');
+                    dBtn.className = 'dealer-btn';
+                    dBtn.textContent = 'D';
+                    dBtn.style.left = `${x + 50}px`;
+                    dBtn.style.top = `${y + 50}px`;
+                    table.appendChild(dBtn);
+                }
+
+                if (p.currentRoundBet > 0) {
+                    const bubble = document.createElement('div');
+                    bubble.className = 'bet-bubble';
+                    bubble.textContent = p.currentRoundBet;
+                    // バブルの位置を少し調整
+                    const bx = centerX + ((radiusX - 50) * Math.cos(angle)); 
+                    const by = centerY + ((radiusY - 50) * Math.sin(angle));
+                    bubble.style.left = `${bx}px`;
+                    bubble.style.top = `${by}px`;
+                    table.appendChild(bubble);
+                }
+            });
+
+            updateControls();
+        }
+
+        function updateControls() {
+            const p = gameState.players[gameState.currentPlayerIndex];
+            const callAmount = gameState.currentMaxBet - p.currentRoundBet;
+            const btnCheck = document.getElementById('btn-check-call');
+            
+            document.getElementById('action-info').textContent = `${p.name}'s Turn`;
+
+            if (callAmount === 0) {
+                btnCheck.textContent = "CHECK";
+                btnCheck.style.background = "var(--btn-check)";
+            } else {
+                btnCheck.textContent = `CALL ${callAmount}`;
+                btnCheck.style.background = "#2e7d32"; 
+            }
+        }
+
+        // --- UTILS & MENU ---
+        function toggleRaiseMenu() {
+            document.getElementById('raise-menu').classList.toggle('hidden');
+        }
+
+        function openCustomBet() {
+            document.getElementById('custom-bet-modal').classList.remove('hidden');
+        }
+        function closeCustomBet() {
+            document.getElementById('custom-bet-modal').classList.add('hidden');
+        }
+        function submitCustomBet() {
+            const val = document.getElementById('custom-bet-input').value;
+            if(val) handleAction('raise', val);
+            closeCustomBet();
+        }
+
+        function saveState() {
+            historyStack.push(JSON.parse(JSON.stringify(gameState)));
+            if(historyStack.length > 20) historyStack.shift();
+        }
+
+        function undo() {
+            if (historyStack.length === 0) return;
+            gameState = historyStack.pop();
+            render();
+            document.getElementById('winner-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+        }
+        
+        function openSetup() {
+            if(confirm("セットアップ画面に戻りますか？現在の進行状況は失われる可能性があります。")) {
+                document.getElementById('game-screen').classList.add('hidden');
+                document.getElementById('setup-screen').classList.remove('hidden');
+            }
+        }
+
+        initSetup();
+    </script>
+</body>
+</html>
