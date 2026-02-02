@@ -15,6 +15,7 @@
             --btn-fold: #b71c1c;
             --btn-check: #2e7d32;
             --btn-raise: #f57f17;
+            --btn-allin: #d50000; /* All In Red */
             --chip-color: #ffb74d;
         }
 
@@ -41,14 +42,19 @@
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 0.9rem; }
         input[type="text"], input[type="number"] {
-            width: 100%; padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: #fff; font-size: 1rem;
+            padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: #fff; font-size: 1rem;
         }
+        input[type="text"] { width: 100%; }
+        /* SetupのInput調整 */
+        .player-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .p-name { flex: 2; }
+        .p-chips { flex: 1; min-width: 70px; text-align: right; }
+        
         button {
             width: 100%; padding: 12px; border: none; border-radius: 5px; font-size: 1rem; font-weight: bold; cursor: pointer; color: #fff; margin-top: 10px;
         }
         .btn-primary { background: var(--accent-color); color: #000; }
         .btn-secondary { background: #444; }
-        .player-row { display: flex; gap: 10px; margin-bottom: 10px; }
         
         /* Header Info */
         #game-header {
@@ -64,13 +70,11 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            /* overflow hiddenを外して、paddingで内側に寄せることで見切れ防止 */
             overflow: hidden; 
             padding: 40px; 
         }
         
         #poker-table {
-            /* 画面いっぱいではなく、座席分のスペースを空けるためにサイズ縮小 */
             width: 70vw; 
             height: 40vh;
             max-width: 500px;
@@ -116,7 +120,6 @@
             z-index: 5;
         }
         
-        /* ★ 誰の番か明確にする変更点 */
         @keyframes activePulse {
             0% { box-shadow: 0 0 10px var(--accent-color); transform: scale(1.1); }
             100% { box-shadow: 0 0 25px var(--accent-color), 0 0 10px #fff; transform: scale(1.15); }
@@ -127,10 +130,10 @@
         }
 
         .seat.active { 
-            background: var(--accent-color); /* 背景を金に */
-            color: #000; /* 文字を黒に */
+            background: var(--accent-color);
+            color: #000;
             border-color: #fff;
-            animation: activePulse 0.8s infinite alternate; /* 点滅アニメーション */
+            animation: activePulse 0.8s infinite alternate;
             z-index: 10;
         }
         .seat.active .seat-stack { color: #000; font-weight: bold; }
@@ -183,8 +186,29 @@
         .btn-check { background: var(--btn-check); }
         .btn-raise { background: var(--btn-raise); }
         
-        .raise-options { display: flex; gap: 5px; margin-top: 8px; justify-content: space-between; }
-        .raise-opt-btn { flex: 1; background: #333; border: 1px solid #555; color: #fff; padding: 10px 0; border-radius: 4px; font-size: 0.9rem; }
+        /* Raise Menu Grid Layout */
+        .raise-options { 
+            display: flex; 
+            gap: 8px; 
+            margin-top: 8px; 
+            flex-wrap: wrap; /* 折り返し有効化 */
+        }
+        .raise-opt-btn { 
+            flex: 1 1 30%; /* 3列にする */
+            background: #333; 
+            border: 1px solid #555; 
+            color: #fff; 
+            padding: 12px 0; 
+            border-radius: 4px; 
+            font-size: 0.9rem; 
+            margin-top: 0;
+        }
+        .btn-allin-opt {
+            background: var(--btn-allin) !important;
+            border-color: #ff5252 !important;
+            font-weight: bold;
+            color: white !important;
+        }
         
         /* Winner Selection */
         #winner-screen { display: flex; flex-direction: column; padding: 20px; }
@@ -207,20 +231,25 @@
     <div id="setup-screen" class="full-screen">
         <h1>Texas Hold'em Manager</h1>
         <div class="input-group">
-            <label>初期チップ (Initial Stack)</label>
-            <input type="number" id="init-chips" value="1000">
-        </div>
-        <div class="input-group">
             <label>Big Blind (BB)</label>
-            <input type="number" id="init-bb" value="20">
+            <input type="number" id="init-bb" value="20" style="width:100%">
         </div>
+        
         <div class="input-group">
-            <label>プレイヤー</label>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label>プレイヤーと持ち点</label>
+                <small style="color:#aaa">新規の初期値: <span id="default-chip-display">1000</span></small>
+            </div>
+            <input type="number" id="init-chips" value="1000" style="display:none">
+
             <div id="player-list-inputs">
                 </div>
             <button class="btn-secondary" onclick="addPlayerInput()">+ プレイヤー追加</button>
         </div>
-        <button class="btn-primary" onclick="startGame()">ゲーム開始</button>
+        <button class="btn-primary" onclick="applySetup()">ゲーム開始 / 更新</button>
+        <p style="text-align:center; color:#666; font-size:0.8rem; margin-top:10px;">
+            ※更新すると新しいハンドが始まります
+        </p>
     </div>
 
     <div id="game-screen" class="full-screen hidden" style="display: flex; flex-direction: column;">
@@ -253,6 +282,7 @@
                 <button class="raise-opt-btn" onclick="handleAction('raise', 2.0)">2BB</button>
                 <button class="raise-opt-btn" onclick="handleAction('raise', 3.0)">3BB</button>
                 <button class="raise-opt-btn" onclick="handleAction('raise', 'pot')">Pot</button>
+                <button class="raise-opt-btn btn-allin-opt" onclick="handleAction('raise', 'allin')">ALL IN</button>
                 <button class="raise-opt-btn" style="background:#555" onclick="openCustomBet()">Custom</button>
             </div>
         </div>
@@ -267,7 +297,7 @@
 
     <div id="custom-bet-modal" class="hidden">
         <h2 style="color:white">ベット額を入力</h2>
-        <input type="number" id="custom-bet-input" placeholder="Amount">
+        <input type="number" id="custom-bet-input" placeholder="Amount" style="width:100%">
         <div style="display:flex; gap:10px; margin-top:20px;">
             <button class="btn-secondary" onclick="closeCustomBet()">キャンセル</button>
             <button class="btn-primary" onclick="submitCustomBet()">決定</button>
@@ -284,7 +314,7 @@
             pot: 0,
             dealerIndex: 0,
             currentPlayerIndex: 0,
-            roundIndex: 0, // 0-3
+            roundIndex: 0, 
             currentMaxBet: 0, 
             minRaise: 0,
             lastRaiseAmount: 0, 
@@ -294,36 +324,54 @@
         let historyStack = [];
 
         // --- SETUP & INIT ---
-        function initSetup() {
-            const container = document.getElementById('player-list-inputs');
-            container.innerHTML = '';
-            for(let i=1; i<=4; i++) {
-                addPlayerInput(`Player ${i}`);
-            }
-        }
+        window.onload = function() {
+            addPlayerInput("Player 1", 1000);
+            addPlayerInput("Player 2", 1000);
+            addPlayerInput("Player 3", 1000);
+            addPlayerInput("Player 4", 1000);
+        };
 
-        function addPlayerInput(defaultName = "") {
+        function addPlayerInput(defaultName = "", defaultChips = null) {
             const container = document.getElementById('player-list-inputs');
+            const globalInitChips = document.getElementById('init-chips').value;
+            const chipValue = defaultChips !== null ? defaultChips : globalInitChips;
+
             const div = document.createElement('div');
             div.className = 'player-row';
             div.innerHTML = `
                 <input type="text" placeholder="Name" value="${defaultName}" class="p-name">
+                <input type="number" placeholder="Chips" value="${chipValue}" class="p-chips">
                 <button class="btn-secondary" style="width:40px;margin:0;" onclick="this.parentElement.remove()">x</button>
             `;
             container.appendChild(div);
         }
 
-        function startGame() {
-            const pInputs = document.querySelectorAll('.p-name');
-            const initChips = parseInt(document.getElementById('init-chips').value);
+        function openSetup() {
+            if (gameState.players.length > 0) {
+                const container = document.getElementById('player-list-inputs');
+                container.innerHTML = '';
+                gameState.players.forEach(p => {
+                    addPlayerInput(p.name, p.chips);
+                });
+                document.getElementById('init-bb').value = gameState.bb;
+            }
+            document.getElementById('game-screen').classList.add('hidden');
+            document.getElementById('winner-screen').classList.add('hidden');
+            document.getElementById('setup-screen').classList.remove('hidden');
+        }
+
+        function applySetup() {
+            const nameInputs = document.querySelectorAll('.p-name');
+            const chipInputs = document.querySelectorAll('.p-chips');
             const bb = parseInt(document.getElementById('init-bb').value);
             
-            gameState.players = [];
-            pInputs.forEach(input => {
+            const newPlayers = [];
+            nameInputs.forEach((input, index) => {
                 if(input.value.trim() !== "") {
-                    gameState.players.push({
+                    const chipVal = parseInt(chipInputs[index].value);
+                    newPlayers.push({
                         name: input.value,
-                        chips: initChips,
+                        chips: isNaN(chipVal) ? 0 : chipVal,
                         isActive: true,
                         isFolded: false,
                         isAllIn: false,
@@ -333,28 +381,27 @@
                 }
             });
 
-            if(gameState.players.length < 2) {
+            if(newPlayers.length < 2) {
                 alert("最低2人のプレイヤーが必要です");
                 return;
             }
 
+            gameState.players = newPlayers;
             gameState.bb = bb;
             gameState.sb = Math.floor(bb / 2);
-            gameState.dealerIndex = Math.floor(Math.random() * gameState.players.length);
+            
+            if (gameState.dealerIndex >= gameState.players.length) {
+                gameState.dealerIndex = 0;
+            }
 
             document.getElementById('setup-screen').classList.add('hidden');
-            // Remove hidden but ensure display:flex is respected
-            const gameScreen = document.getElementById('game-screen');
-            gameScreen.classList.remove('hidden');
-            
+            document.getElementById('game-screen').classList.remove('hidden');
             startNewHand();
         }
 
         function startNewHand() {
             saveState();
-            
             gameState.dealerIndex = (gameState.dealerIndex + 1) % gameState.players.length;
-            
             gameState.pot = 0;
             gameState.roundIndex = 0;
             gameState.board = [];
@@ -365,7 +412,6 @@
             gameState.players.forEach(p => {
                 p.currentRoundBet = 0;
                 p.hasActed = false;
-                
                 if (p.chips > 0) {
                     p.isActive = true;
                     p.isFolded = false;
@@ -384,7 +430,6 @@
             postBlind(bbIndex, gameState.bb);
 
             gameState.currentPlayerIndex = getNextActivePlayer(bbIndex);
-
             render();
         }
 
@@ -431,18 +476,24 @@
                 } else if (val === 'pot') {
                     const callAmount = currentCall - p.currentRoundBet;
                     targetTotalBet = currentCall + (gameState.pot + callAmount);
+                } else if (val === 'allin') {
+                    // ★ ALL IN LOGIC
+                    targetTotalBet = p.currentRoundBet + p.chips;
                 } else if (typeof val === 'number') {
                     targetTotalBet = currentCall + (gameState.bb * val);
                 } else {
                     targetTotalBet = parseInt(val);
                 }
 
-                if (targetTotalBet < currentCall + gameState.lastRaiseAmount && targetTotalBet < p.chips + p.currentRoundBet) {
-                    if (targetTotalBet >= p.chips + p.currentRoundBet) {
-                        targetTotalBet = p.chips + p.currentRoundBet; 
-                    } else {
-                        const minTotal = currentCall + Math.max(gameState.bb, gameState.lastRaiseAmount);
-                        targetTotalBet = Math.max(targetTotalBet, minTotal);
+                // Validation
+                if (val !== 'allin') {
+                    if (targetTotalBet < currentCall + gameState.lastRaiseAmount && targetTotalBet < p.chips + p.currentRoundBet) {
+                        if (targetTotalBet >= p.chips + p.currentRoundBet) {
+                            targetTotalBet = p.chips + p.currentRoundBet; // Becomes All-in
+                        } else {
+                            const minTotal = currentCall + Math.max(gameState.bb, gameState.lastRaiseAmount);
+                            targetTotalBet = Math.max(targetTotalBet, minTotal);
+                        }
                     }
                 }
 
@@ -488,7 +539,6 @@
             });
             
             if (unfinished) return false;
-
             return true;
         }
 
@@ -507,7 +557,6 @@
             });
             
             gameState.currentPlayerIndex = getNextActivePlayer(gameState.dealerIndex);
-
             render();
         }
 
@@ -522,7 +571,6 @@
         }
 
         // --- WINNER LOGIC ---
-
         function resolveWinnerAuto() {
             const winner = gameState.players.find(p => !p.isFolded);
             alert(`${winner.name} Wins! Pot: ${gameState.pot}`);
@@ -578,32 +626,25 @@
         }
 
         // --- UI RENDER ---
-
         function render() {
-            // Header
             document.getElementById('round-display').textContent = ROUNDS[gameState.roundIndex];
             document.getElementById('pot-amount').textContent = gameState.pot;
             
-            // Community Cards
             let cardsText = "";
             if(gameState.roundIndex > 0) cardsText += "🂠🂠🂠 ";
             if(gameState.roundIndex > 1) cardsText += "🂠 ";
             if(gameState.roundIndex > 2) cardsText += "🂠";
             document.getElementById('comm-cards').textContent = cardsText;
             
-            // Turn Indicator (Center)
             const activePlayer = gameState.players[gameState.currentPlayerIndex];
             document.getElementById('turn-indicator').textContent = activePlayer ? `Current: ${activePlayer.name}` : "";
 
-            // Seats
             const table = document.getElementById('poker-table');
             document.querySelectorAll('.seat, .dealer-btn, .bet-bubble').forEach(e => e.remove());
 
             const totalP = gameState.players.length;
             const centerX = table.clientWidth / 2;
             const centerY = table.clientHeight / 2;
-            // 修正: 半径をテーブルサイズより大きく取りすぎないようにする
-            // テーブルの外周にちょうど乗るくらいの位置調整
             const radiusX = (table.clientWidth / 2) + 10; 
             const radiusY = (table.clientHeight / 2) + 10;
 
@@ -637,7 +678,6 @@
                     const bubble = document.createElement('div');
                     bubble.className = 'bet-bubble';
                     bubble.textContent = p.currentRoundBet;
-                    // バブルの位置を少し調整
                     const bx = centerX + ((radiusX - 50) * Math.cos(angle)); 
                     const by = centerY + ((radiusY - 50) * Math.sin(angle));
                     bubble.style.left = `${bx}px`;
@@ -656,7 +696,11 @@
             
             document.getElementById('action-info').textContent = `${p.name}'s Turn`;
 
-            if (callAmount === 0) {
+            // All-in handling for Call button label
+            if (p.chips <= callAmount && callAmount > 0) {
+                 btnCheck.textContent = "ALL IN (CALL)";
+                 btnCheck.style.background = "var(--btn-allin)";
+            } else if (callAmount === 0) {
                 btnCheck.textContent = "CHECK";
                 btnCheck.style.background = "var(--btn-check)";
             } else {
@@ -694,15 +738,6 @@
             document.getElementById('winner-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
         }
-        
-        function openSetup() {
-            if(confirm("セットアップ画面に戻りますか？現在の進行状況は失われる可能性があります。")) {
-                document.getElementById('game-screen').classList.add('hidden');
-                document.getElementById('setup-screen').classList.remove('hidden');
-            }
-        }
-
-        initSetup();
     </script>
 </body>
 </html>
