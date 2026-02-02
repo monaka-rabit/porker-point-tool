@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Texas Hold'em Manager</title>
     <style>
         :root {
@@ -15,18 +15,21 @@
             --btn-fold: #b71c1c;
             --btn-check: #2e7d32;
             --btn-raise: #f57f17;
-            --btn-allin: #d50000; /* All In Red */
+            --btn-allin: #d50000;
             --chip-color: #ffb74d;
         }
 
         * { box-sizing: border-box; touch-action: manipulation; user-select: none; }
+        
         body {
             margin: 0;
             padding: 0;
             background-color: var(--bg-color);
             color: var(--text-color);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            height: 100vh;
+            /* モバイルブラウザのアドレスバー対策 */
+            height: 100dvh; 
+            width: 100vw;
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -34,10 +37,31 @@
 
         /* Utility */
         .hidden { display: none !important; }
-        .full-screen { width: 100%; height: 100%; position: absolute; top: 0; left: 0; z-index: 10; background: var(--bg-color); }
+        
+        /* full-screenクラスを修正 
+           position: absoluteをやめ、flexコンテナ内で広げる形に変更する場合もあるが、
+           画面遷移(オーバーレイ)のためにabsoluteは維持しつつ、パディングで調整する
+        */
+        .full-screen { 
+            width: 100%; 
+            height: 100%; 
+            position: absolute; 
+            top: 0; 
+            left: 0; 
+            z-index: 10; 
+            background: var(--bg-color);
+            display: flex;
+            flex-direction: column;
+        }
         
         /* Setup Screen */
-        #setup-screen { padding: 20px; overflow-y: auto; z-index: 20; }
+        #setup-screen { 
+            /* ノッチ対策: 上部に余白を持たせる */
+            padding: max(20px, env(safe-area-inset-top)) 20px 20px 20px; 
+            overflow-y: auto; 
+            z-index: 20; 
+        }
+        
         h1, h2 { text-align: center; color: var(--accent-color); margin: 0.5rem 0; }
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 0.9rem; }
@@ -45,7 +69,8 @@
             padding: 10px; border-radius: 5px; border: 1px solid #444; background: #222; color: #fff; font-size: 1rem;
         }
         input[type="text"] { width: 100%; }
-        /* SetupのInput調整 */
+        
+        /* Setup Input Layout */
         .player-row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
         .p-name { flex: 2; }
         .p-chips { flex: 1; min-width: 70px; text-align: right; }
@@ -56,12 +81,34 @@
         .btn-primary { background: var(--accent-color); color: #000; }
         .btn-secondary { background: #444; }
         
-        /* Header Info */
+        /* Header Info - ノッチ対策修正 */
         #game-header {
-            height: 50px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 15px; background: #1f1f1f; border-bottom: 1px solid #333;
+            /* 高さ自動調整（最小高さを確保） */
+            min-height: 60px; 
+            flex-shrink: 0; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            /* 上部にセーフエリア分の余白を追加 */
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: 5px;
+            padding-left: 15px;
+            padding-right: 15px;
+            background: #1f1f1f; 
+            border-bottom: 1px solid #333;
         }
-        .round-info { font-weight: bold; color: var(--accent-color); }
-        .header-btn { background: none; border: 1px solid #555; padding: 5px 10px; font-size: 0.8rem; width: auto; margin: 0; color: #ccc; }
+        .round-info { font-weight: bold; color: var(--accent-color); margin-top: 5px;}
+        /* ボタンの位置も少し下げるためにマージン調整 */
+        .header-btn { 
+            background: none; 
+            border: 1px solid #555; 
+            padding: 5px 10px; 
+            font-size: 0.8rem; 
+            width: auto; 
+            margin: 5px 0 0 0; /* 上マージン追加 */
+            color: #ccc; 
+            cursor: pointer;
+        }
 
         /* Poker Table Area */
         #table-area {
@@ -71,14 +118,14 @@
             justify-content: center;
             align-items: center;
             overflow: hidden; 
-            padding: 40px; 
+            padding: 20px; 
         }
         
         #poker-table {
-            width: 70vw; 
-            height: 40vh;
+            width: 80vw; 
+            height: 45vh;
             max-width: 500px;
-            max-height: 350px;
+            max-height: 400px;
             background: var(--table-color);
             border: 8px solid var(--table-border);
             border-radius: 120px;
@@ -177,6 +224,7 @@
             padding: 15px 10px;
             border-top: 1px solid #333;
             z-index: 100;
+            /* iPhone下部のバー対策 */
             padding-bottom: max(15px, env(safe-area-inset-bottom));
         }
         .action-info { text-align: center; margin-bottom: 8px; font-size: 1.1rem; color: #fff; font-weight: bold; }
@@ -191,10 +239,10 @@
             display: flex; 
             gap: 8px; 
             margin-top: 8px; 
-            flex-wrap: wrap; /* 折り返し有効化 */
+            flex-wrap: wrap;
         }
         .raise-opt-btn { 
-            flex: 1 1 30%; /* 3列にする */
+            flex: 1 1 30%; 
             background: #333; 
             border: 1px solid #555; 
             color: #fff; 
@@ -210,8 +258,10 @@
             color: white !important;
         }
         
-        /* Winner Selection */
-        #winner-screen { display: flex; flex-direction: column; padding: 20px; }
+        /* Winner Selection - Setupと同様に上部にパディング */
+        #winner-screen { 
+            padding: max(20px, env(safe-area-inset-top)) 20px 20px 20px; 
+        }
         .winner-list { flex-grow: 1; overflow-y: auto; }
         .winner-item { 
             display: flex; align-items: center; padding: 15px; border-bottom: 1px solid #333; cursor: pointer;
@@ -252,7 +302,7 @@
         </p>
     </div>
 
-    <div id="game-screen" class="full-screen hidden" style="display: flex; flex-direction: column;">
+    <div id="game-screen" class="full-screen hidden">
         <div id="game-header">
             <button class="header-btn" onclick="undo()">Undo</button>
             <div class="round-info" id="round-display">PREFLOP</div>
@@ -477,7 +527,7 @@
                     const callAmount = currentCall - p.currentRoundBet;
                     targetTotalBet = currentCall + (gameState.pot + callAmount);
                 } else if (val === 'allin') {
-                    // ★ ALL IN LOGIC
+                    // ALL IN LOGIC
                     targetTotalBet = p.currentRoundBet + p.chips;
                 } else if (typeof val === 'number') {
                     targetTotalBet = currentCall + (gameState.bb * val);
@@ -696,7 +746,6 @@
             
             document.getElementById('action-info').textContent = `${p.name}'s Turn`;
 
-            // All-in handling for Call button label
             if (p.chips <= callAmount && callAmount > 0) {
                  btnCheck.textContent = "ALL IN (CALL)";
                  btnCheck.style.background = "var(--btn-allin)";
@@ -737,6 +786,8 @@
             render();
             document.getElementById('winner-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
+            // Hide setup if it was open
+            document.getElementById('setup-screen').classList.add('hidden');
         }
     </script>
 </body>
